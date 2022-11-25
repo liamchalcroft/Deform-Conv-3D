@@ -58,7 +58,7 @@
  * \author Yuwen Xiong, Haozhi Qi, Jifeng Dai, Xizhou Zhu, Han Hu, Dazhi Cheng
  */
 
-#include "deform_conv_cuda_kernel.h"
+#include "deform_conv_2d_cuda_kernel.h"
 #include <cstdio>
 #include <algorithm>
 

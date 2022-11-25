@@ -1,4 +1,4 @@
-#include "modulated_deform_im2col_cuda.h"
+#include "modulated_deform_im2col_2d_cuda.h"
 #include <cstdio>
 #include <algorithm>
 #include <cstring>
@@ -314,7 +314,7 @@ __global__ void modulated_deformable_col2im_coord_gpu_kernel(const int n,
 void modulated_deformable_im2col_cuda(cudaStream_t stream,
   const float* data_im, const float* data_offset, const float* data_mask,
   const int batch_size, const int channels, const int height_im, const int width_im, 
-  const int height_col, const int width_col, const int kernel_h, const int kenerl_w,
+  const int height_col, const int width_col, const int kernel_h, const int kernel_w,
   const int pad_h, const int pad_w, const int stride_h, const int stride_w, 
   const int dilation_h, const int dilation_w,
   const int deformable_group, float* data_col) {
@@ -324,7 +324,7 @@ void modulated_deformable_im2col_cuda(cudaStream_t stream,
   modulated_deformable_im2col_gpu_kernel
       <<<GET_BLOCKS(num_kernels), CUDA_NUM_THREADS,
           0, stream>>>(
-      num_kernels, data_im, data_offset, data_mask, height_im, width_im, kernel_h, kenerl_w,
+      num_kernels, data_im, data_offset, data_mask, height_im, width_im, kernel_h, kernel_w,
       pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w, channel_per_deformable_group,
       batch_size, channels, deformable_group, height_col, width_col, data_col);
   

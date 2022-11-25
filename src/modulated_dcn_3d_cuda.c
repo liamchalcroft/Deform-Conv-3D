@@ -1,6 +1,6 @@
 #include <THC/THC.h>
-#include "cuda/modulated_deform_im2col_cuda.h"
-#include "cuda/deform_psroi_pooling_cuda.h"
+#include "cuda/modulated_deform_im2col_3d_cuda.h"
+#include "cuda/deform_psroi_pooling_3d_cuda.h"
 
 extern THCState *state;
 
@@ -11,10 +11,10 @@ void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weigh
                          THCudaTensor *bias, THCudaTensor *ones,
                          THCudaTensor *offset, THCudaTensor *mask,
                          THCudaTensor *output, THCudaTensor *columns,
-                         int kernel_h, int kernel_w,
-                         const int stride_h, const int stride_w,
-                         const int pad_h, const int pad_w,
-                         const int dilation_h, const int dilation_w,
+                         int kernel_h, int kernel_w, int kernel_d,
+                         const int stride_h, const int stride_w, const int stride_d,
+                         const int pad_h, const int pad_w, const int pad_d,
+                         const int dilation_h, const int dilation_w, const int dilation_d,
                          const int deformable_group)
 {
     THCAssertSameGPU(THCudaTensor_checkGPU(state, 8, input, weight, bias, ones, offset, mask, output, columns));
@@ -25,33 +25,36 @@ void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weigh
     const int channels = THCudaTensor_size(state, input, 1);
     const int height = THCudaTensor_size(state, input, 2);
     const int width = THCudaTensor_size(state, input, 3);
+    const int depth = THCudaTensor_size(state, input, 4);
 
     const int channels_out = THCudaTensor_size(state, weight, 0);
     const int channels_kernel = THCudaTensor_size(state, weight, 1);
     const int kernel_h_ = THCudaTensor_size(state, weight, 2);
     const int kernel_w_ = THCudaTensor_size(state, weight, 3);
-    if (kernel_h_ != kernel_h || kernel_w_ != kernel_w)
-        THError("Input shape and kernel shape wont match: (%d x %d vs %d x %d).", 
-        kernel_h_, kernel_w, kernel_h_, kernel_w_);
+    const int kernel_d_ = THCudaTensor_size(state, weight, 4);
+    if (kernel_h_ != kernel_h || kernel_w_ != kernel_w || kernel_d_ != kernel_d)
+        THError("Input shape and kernel shape wont match: (%d x %d x %d vs %d x %d x %d).", 
+        kernel_h, kernel_w, kernel_d, kernel_h_, kernel_w_, kernel_d_);
     if (channels != channels_kernel)
         THError("Input shape and kernel channels wont match: (%d vs %d).", 
         channels, channels_kernel);
 
     const int height_out = (height + 2 * pad_h - (dilation_h * (kernel_h - 1) + 1)) / stride_h + 1;
     const int width_out = (width + 2 * pad_w - (dilation_w * (kernel_w - 1) + 1)) / stride_w + 1;
+    const int depth_out = (depth + 2 * pad_d - (dilation_d * (kernel_d - 1) + 1)) / stride_d + 1;
 
-    if (THCudaTensor_nDimension(state, ones) != 2 ||
-        THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out)
+    if (THCudaTensor_nDimension(state, ones) != 3 ||
+        THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out * depth_out)
     {
         // Resize plane and fill with ones...
-        THCudaTensor_resize2d(state, ones, height_out, width_out);
+        THCudaTensor_resize2d(state, ones, height_out, width_out, depth_out);
         THCudaTensor_fill(state, ones, 1);
     }
 
     // resize output
-    THCudaTensor_resize4d(state, output, batch, channels_out, height_out, width_out);
+    THCudaTensor_resize5d(state, output, batch, channels_out, height_out, width_out, depth_out);
     // resize temporary columns
-    THCudaTensor_resize2d(state, columns, channels * kernel_h * kernel_w, 1 * height_out * width_out);
+    THCudaTensor_resize2d(state, columns, channels * kernel_h * kernel_w * kernel_d, 1 * height_out * width_out * depth_out);
 
     THCudaTensor *input_n = THCudaTensor_new(state);
     THCudaTensor *offset_n = THCudaTensor_new(state);
@@ -77,19 +80,19 @@ void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weigh
                          THCudaTensor_data(state, bias), k_, 0.0f,
                          THCudaTensor_data(state, output_n), n_);
 
-        modulated_deformable_im2col_cuda(THCState_getCurrentStream(state),
+        modulated_deformable_im2col_3d_cuda(THCState_getCurrentStream(state),
                                          THCudaTensor_data(state, input_n), THCudaTensor_data(state, offset_n),
                                          THCudaTensor_data(state, mask_n),
-                                         1, channels, height, width,
-                                         height_out, width_out, kernel_h, kernel_w,
-                                         pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w,
+                                         1, channels, height, width, depth,
+                                         height_out, width_out, depth_out, kernel_h, kernel_w, kernel_d,
+                                         pad_h, pad_w, pad_d, stride_h, stride_w, stride_d, dilation_h, dilation_w, dilation_d,
                                          deformable_group, THCudaTensor_data(state, columns));
 
         //(k * m)  x  (m * n)
         // Y = WC
         long m = channels_out;
-        long n = height_out * width_out;
-        long k = channels * kernel_h * kernel_w;
+        long n = height_out * width_out * depth_out;
+        long k = channels * kernel_h * kernel_w * kernel_d;
         THCudaBlas_Sgemm(state, 'n', 'n', n, m, k, 1.0f,
                          THCudaTensor_data(state, columns), n,
                          THCudaTensor_data(state, weight), k, 1.0f,
@@ -108,10 +111,10 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
                           THCudaTensor *grad_input, THCudaTensor *grad_weight,
                           THCudaTensor *grad_bias, THCudaTensor *grad_offset,
                           THCudaTensor *grad_mask, THCudaTensor *grad_output,
-                          int kernel_h, int kernel_w,
-                          int stride_h, int stride_w,
-                          int pad_h, int pad_w,
-                          int dilation_h, int dilation_w,
+                          int kernel_h, int kernel_w, int kernel_d,
+                          int stride_h, int stride_w, int stride_d,
+                          int pad_h, int pad_w, int pad_d,
+                          int dilation_h, int dilation_w, int dilation_d,
                           int deformable_group)
 {
     THCAssertSameGPU(THCudaTensor_checkGPU(state, 13, input, weight, bias, ones, offset, mask, columns,
@@ -123,31 +126,34 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
     const int channels = THCudaTensor_size(state, input, 1);
     const int height = THCudaTensor_size(state, input, 2);
     const int width = THCudaTensor_size(state, input, 3);
+    const int depth = THCudaTensor_size(state, input, 4);
 
     const int channels_out = THCudaTensor_size(state, weight, 0);
     const int channels_kernel = THCudaTensor_size(state, weight, 1);
     const int kernel_h_ = THCudaTensor_size(state, weight, 2);
     const int kernel_w_ = THCudaTensor_size(state, weight, 3);
-    if (kernel_h_ != kernel_h || kernel_w_ != kernel_w)
-        THError("Input shape and kernel shape wont match: (%d x %d vs %d x %d).", 
-        kernel_h_, kernel_w, kernel_h_, kernel_w_);
+    const int kernel_d_ = THCudaTensor_size(state, weight, 4);
+    if (kernel_h_ != kernel_h || kernel_w_ != kernel_w || kernel_d_ != kernel_d)
+        THError("Input shape and kernel shape wont match: (%d x %d x %d vs %d x %d x %d).", 
+        kernel_h, kernel_w, kernel_d, kernel_h_, kernel_w_, kernel_d_);
     if (channels != channels_kernel)
         THError("Input shape and kernel channels wont match: (%d vs %d).", 
         channels, channels_kernel);
 
     const int height_out = (height + 2 * pad_h - (dilation_h * (kernel_h - 1) + 1)) / stride_h + 1;
     const int width_out = (width + 2 * pad_w - (dilation_w * (kernel_w - 1) + 1)) / stride_w + 1;
+    const int depth_out = (depth + 2 * pad_d - (dilation_d * (kernel_d - 1) + 1)) / stride_d + 1;
 
     if (THCudaTensor_nDimension(state, ones) != 2 ||
-        THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out)
+        THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out * depth_out)
     {
         // Resize plane and fill with ones...
-        THCudaTensor_resize2d(state, ones, height_out, width_out);
+        THCudaTensor_resize2d(state, ones, height_out, width_out, depth_out);
         THCudaTensor_fill(state, ones, 1.0f);
     }
 
-    THCudaTensor_resize4d(state, grad_input, batch, channels, height, width);
-    THCudaTensor_resize2d(state, columns, channels * kernel_h * kernel_w, height_out * width_out);
+    THCudaTensor_resize5d(state, grad_input, batch, channels, height, width, depth);
+    THCudaTensor_resize2d(state, columns, channels * kernel_h * kernel_w * kernel_d, height_out * width_out * depth_out);
 
     THCudaTensor *input_n = THCudaTensor_new(state);
     THCudaTensor *offset_n = THCudaTensor_new(state);
@@ -168,8 +174,8 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
         THCudaTensor_select(state, grad_offset_n, grad_offset, 0, b);
         THCudaTensor_select(state, grad_mask_n, grad_mask, 0, b);
 
-        long m = channels * kernel_h * kernel_w;
-        long n = height_out * width_out;
+        long m = channels * kernel_h * kernel_w * kernel_d;
+        long n = height_out * width_out * depth_out;
         long k = channels_out;
 
         THCudaBlas_Sgemm(state, 'n', 't', n, m, k, 1.0f,
@@ -183,10 +189,10 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
                                                THCudaTensor_data(state, input_n),
                                                THCudaTensor_data(state, offset_n),
                                                THCudaTensor_data(state, mask_n),
-                                               1, channels, height, width,
-                                               height_out, width_out, kernel_h, kernel_w,
-                                               pad_h, pad_w, stride_h, stride_w,
-                                               dilation_h, dilation_w, deformable_group,
+                                               1, channels, height, width, depth,
+                                               height_out, width_out, depth_out, kernel_h, kernel_w, kernel_d,
+                                               pad_h, pad_w, pad_d, stride_h, stride_w, stride_d,
+                                               dilation_h, dilation_w, dilation_d, deformable_group,
                                                THCudaTensor_data(state, grad_offset_n),
                                                THCudaTensor_data(state, grad_mask_n));
         // gradient w.r.t. input data
@@ -194,10 +200,10 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
                                          THCudaTensor_data(state, columns),
                                          THCudaTensor_data(state, offset_n),
                                          THCudaTensor_data(state, mask_n),
-                                         1, channels, height, width,
-                                         height_out, width_out, kernel_h, kernel_w,
-                                         pad_h, pad_w, stride_h, stride_w,
-                                         dilation_h, dilation_w, deformable_group,
+                                         1, channels, height, width, depth,
+                                         height_out, width_out, depth_out, kernel_h, kernel_w, kernel_d,
+                                         pad_h, pad_w, pad_d, stride_h, stride_w, stride_d,
+                                         dilation_h, dilation_w, dilation_d, deformable_group,
                                          THCudaTensor_data(state, grad_input_n));
 
         // gradient w.r.t. weight, dWeight should accumulate across the batch and group
@@ -205,14 +211,14 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
                                          THCudaTensor_data(state, input_n),
                                          THCudaTensor_data(state, offset_n),
                                          THCudaTensor_data(state, mask_n),
-                                         1, channels, height, width,
-                                         height_out, width_out, kernel_h, kernel_w,
-                                         pad_h, pad_w, stride_h, stride_w,
-                                         dilation_h, dilation_w, deformable_group,
+                                         1, channels, height, width, depth,
+                                         height_out, width_out, depth_out, kernel_h, kernel_w, kernel_d,
+                                         pad_h, pad_w, pad_d, stride_h, stride_w, stride_d,
+                                         dilation_h, dilation_w, dilation_d, deformable_group,
                                          THCudaTensor_data(state, columns));
         long m_ = channels_out;
-        long n_ = channels * kernel_h * kernel_w;
-        long k_ = height_out * width_out;
+        long n_ = channels * kernel_h * kernel_w * kernel_d;
+        long k_ = height_out * width_out * depth_out;
 
         THCudaBlas_Sgemm(state, 't', 'n', n_, m_, k_, 1.0f,
                          THCudaTensor_data(state, columns), k_,
@@ -259,6 +265,7 @@ void deform_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox
     const int channels = THCudaTensor_size(state, input, 1);
     const int height = THCudaTensor_size(state, input, 2);
     const int width = THCudaTensor_size(state, input, 3);
+    const int depth = THCudaTensor_size(state, input, 4);
     const int channels_trans = no_trans? 2 : THCudaTensor_size(state, trans, 1);
 
     const int num_bbox = THCudaTensor_size(state, bbox, 0);
@@ -307,6 +314,7 @@ void deform_psroi_pooling_cuda_backward(THCudaTensor * out_grad,
     const int channels = THCudaTensor_size(state, input, 1);
     const int height = THCudaTensor_size(state, input, 2);
     const int width = THCudaTensor_size(state, input, 3);
+    const int depth = THCudaTensor_size(state, input, 4);
     const int channels_trans = no_trans? 2 : THCudaTensor_size(state, trans, 1);
 
     const int num_bbox = THCudaTensor_size(state, bbox, 0);

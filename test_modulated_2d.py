@@ -20,9 +20,19 @@ kH, kW = 3, 3
 
 def example_dconv():
     from modules.modulated_dcn import ModulatedDeformConv
+
     input = torch.randn(2, 64, 128, 128).cuda()
     # wrap all things (offset and mask) in DCN
-    dcn = ModulatedDeformConvPack(64, 64, kernel_size=(3,3), stride=1, padding=1, deformable_groups=2, no_bias=True).cuda()
+    dcn = ModulatedDeformConvPack(
+        2,
+        64,
+        64,
+        kernel_size=(3, 3),
+        stride=1,
+        padding=1,
+        deformable_groups=2,
+        no_bias=True,
+    ).cuda()
     output = dcn(input)
     targert = output.new(*output.size())
     targert.data.uniform_(-0.01, 0.01)
@@ -30,8 +40,10 @@ def example_dconv():
     error.backward()
     print(output.shape)
 
+
 def example_dpooling():
     from modules.modulated_dcn import ModulatedDeformRoIPoolingPack
+
     input = torch.randn(2, 32, 64, 64).cuda()
     batch_inds = torch.randint(2, (20, 1)).cuda().float()
     x = torch.randint(256, (20, 1)).cuda().float()
@@ -44,20 +56,26 @@ def example_dpooling():
     offset.requires_grad = True
 
     # normal roi_align
-    pooling = DeformRoIPooling(spatial_scale=1.0 / 4,
-                           pooled_size=7,
-                           output_dim=32,
-                           no_trans=True,
-                           group_size=1,
-                           trans_std=0.1).cuda()
+    pooling = DeformRoIPooling(
+        2,
+        spatial_scale=1.0 / 4,
+        pooled_size=7,
+        output_dim=32,
+        no_trans=True,
+        group_size=1,
+        trans_std=0.1,
+    ).cuda()
 
     # deformable pooling
-    dpooling = DeformRoIPooling(spatial_scale=1.0 / 4,
-                            pooled_size=7,
-                            output_dim=32,
-                            no_trans=False,
-                            group_size=1,
-                            trans_std=0.1).cuda()
+    dpooling = DeformRoIPooling(
+        2,
+        spatial_scale=1.0 / 4,
+        pooled_size=7,
+        output_dim=32,
+        no_trans=False,
+        group_size=1,
+        trans_std=0.1,
+    ).cuda()
 
     out = pooling(input, rois, offset)
     dout = dpooling(input, rois, offset)
@@ -73,8 +91,10 @@ def example_dpooling():
     e = (target_dout - dout).mean()
     e.backward()
 
+
 def example_mdpooling():
     from modules.modulated_dcn import ModulatedDeformRoIPoolingPack
+
     input = torch.randn(2, 32, 64, 64).cuda()
     input.requires_grad = True
     batch_inds = torch.randint(2, (20, 1)).cuda().float()
@@ -85,12 +105,15 @@ def example_mdpooling():
     rois = torch.cat((batch_inds, x, y, x + w, y + h), dim=1)
 
     # mdformable pooling (V2)
-    dpooling = ModulatedDeformRoIPoolingPack(spatial_scale=1.0 / 4,
-                         pooled_size=7,
-                         output_dim=32,
-                         no_trans=False,
-                         group_size=1,
-                         trans_std=0.1).cuda()
+    dpooling = ModulatedDeformRoIPoolingPack(
+        2,
+        spatial_scale=1.0 / 4,
+        pooled_size=7,
+        output_dim=32,
+        no_trans=False,
+        group_size=1,
+        trans_std=0.1,
+    ).cuda()
 
     for i in range(2):
         dout = dpooling(input, rois)
@@ -100,7 +123,8 @@ def example_mdpooling():
         error.backward()
         print(dout.shape)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     example_dconv()
     example_dpooling()

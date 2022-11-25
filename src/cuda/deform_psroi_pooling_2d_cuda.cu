@@ -6,7 +6,7 @@
  * \author Yi Li, Guodong Zhang, Jifeng Dai
 */
 /***************** Adapted by Charles Shang *********************/
-#include "deform_psroi_pooling_cuda.h"
+#include "deform_psroi_pooling_2d_cuda.h"
 #include <cstdio>
 #include <algorithm>
 #include <cstring>

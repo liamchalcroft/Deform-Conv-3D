@@ -1,6 +1,6 @@
 #include <THC/THC.h>
 
-#include "deform_conv_cuda_kernel.h"
+#include "deform_conv_2d_cuda_kernel.h"
 
 extern THCState *state;
 

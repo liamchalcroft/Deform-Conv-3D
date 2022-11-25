@@ -1,4 +1,6 @@
-# Deformable-ConvNets-V2 in PyTorch
+# (2D and 3D) Deformable Convolutions in PyTorch
+
+Note: This repo is an extension on the original [Pytorch implementation](https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch) for Deformable Convolutions V2. All docs below here are for the original (2D) repo. Functionality is identical, except that the function inputs should be prefixed with a first input of dim={2,3}.
 
 This repo is an implementation of [Deformable Convolution V2](https://arxiv.org/abs/1811.11168).
 Ported from the original [MXNet implementation](https://github.com/msracver/Deformable-ConvNets/tree/master/DCNv2_op).
