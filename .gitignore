@@ -2,3 +2,5 @@
 *.so
 _ext*
 __pycache__
+*.DS_STORE
+.vscode/*
