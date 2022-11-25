@@ -8,19 +8,19 @@ extern THCState *state;
 // https://github.com/torch/cunn/blob/master/lib/THCUNN/generic/SpatialConvolutionMM.cu
 
 void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weight,
-                         THCudaTensor *bias, THCudaTensor *ones,
-                         THCudaTensor *offset, THCudaTensor *mask,
-                         THCudaTensor *output, THCudaTensor *columns,
-                         int kernel_h, int kernel_w,
-                         const int stride_h, const int stride_w,
-                         const int pad_h, const int pad_w,
-                         const int dilation_h, const int dilation_w,
-                         const int deformable_group)
+                                        THCudaTensor *bias, THCudaTensor *ones,
+                                        THCudaTensor *offset, THCudaTensor *mask,
+                                        THCudaTensor *output, THCudaTensor *columns,
+                                        int kernel_h, int kernel_w,
+                                        const int stride_h, const int stride_w,
+                                        const int pad_h, const int pad_w,
+                                        const int dilation_h, const int dilation_w,
+                                        const int deformable_group)
 {
     THCAssertSameGPU(THCudaTensor_checkGPU(state, 8, input, weight, bias, ones, offset, mask, output, columns));
     THArgCheck(THCudaTensor_isContiguous(state, input), 1, "input tensor has to be contiguous");
     THArgCheck(THCudaTensor_isContiguous(state, weight), 2, "weight tensor has to be contiguous");
-    
+
     const int batch = THCudaTensor_size(state, input, 0);
     const int channels = THCudaTensor_size(state, input, 1);
     const int height = THCudaTensor_size(state, input, 2);
@@ -31,17 +31,17 @@ void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weigh
     const int kernel_h_ = THCudaTensor_size(state, weight, 2);
     const int kernel_w_ = THCudaTensor_size(state, weight, 3);
     if (kernel_h_ != kernel_h || kernel_w_ != kernel_w)
-        THError("Input shape and kernel shape wont match: (%d x %d vs %d x %d).", 
-        kernel_h_, kernel_w, kernel_h_, kernel_w_);
+        THError("Input shape and kernel shape wont match: (%d x %d vs %d x %d).",
+                kernel_h_, kernel_w, kernel_h_, kernel_w_);
     if (channels != channels_kernel)
-        THError("Input shape and kernel channels wont match: (%d vs %d).", 
-        channels, channels_kernel);
+        THError("Input shape and kernel channels wont match: (%d vs %d).",
+                channels, channels_kernel);
 
     const int height_out = (height + 2 * pad_h - (dilation_h * (kernel_h - 1) + 1)) / stride_h + 1;
     const int width_out = (width + 2 * pad_w - (dilation_w * (kernel_w - 1) + 1)) / stride_w + 1;
 
     if (THCudaTensor_nDimension(state, ones) != 2 ||
-        THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out)
+            THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out)
     {
         // Resize plane and fill with ones...
         THCudaTensor_resize2d(state, ones, height_out, width_out);
@@ -102,17 +102,17 @@ void modulated_deform_conv_cuda_forward(THCudaTensor *input, THCudaTensor *weigh
 }
 
 void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weight,
-                          THCudaTensor *bias, THCudaTensor *ones,
-                          THCudaTensor *offset, THCudaTensor *mask,
-                          THCudaTensor *columns,
-                          THCudaTensor *grad_input, THCudaTensor *grad_weight,
-                          THCudaTensor *grad_bias, THCudaTensor *grad_offset,
-                          THCudaTensor *grad_mask, THCudaTensor *grad_output,
-                          int kernel_h, int kernel_w,
-                          int stride_h, int stride_w,
-                          int pad_h, int pad_w,
-                          int dilation_h, int dilation_w,
-                          int deformable_group)
+        THCudaTensor *bias, THCudaTensor *ones,
+        THCudaTensor *offset, THCudaTensor *mask,
+        THCudaTensor *columns,
+        THCudaTensor *grad_input, THCudaTensor *grad_weight,
+        THCudaTensor *grad_bias, THCudaTensor *grad_offset,
+        THCudaTensor *grad_mask, THCudaTensor *grad_output,
+        int kernel_h, int kernel_w,
+        int stride_h, int stride_w,
+        int pad_h, int pad_w,
+        int dilation_h, int dilation_w,
+        int deformable_group)
 {
     THCAssertSameGPU(THCudaTensor_checkGPU(state, 13, input, weight, bias, ones, offset, mask, columns,
                                            grad_input, grad_weight, grad_bias, grad_offset, grad_mask, grad_output));
@@ -129,17 +129,17 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
     const int kernel_h_ = THCudaTensor_size(state, weight, 2);
     const int kernel_w_ = THCudaTensor_size(state, weight, 3);
     if (kernel_h_ != kernel_h || kernel_w_ != kernel_w)
-        THError("Input shape and kernel shape wont match: (%d x %d vs %d x %d).", 
-        kernel_h_, kernel_w, kernel_h_, kernel_w_);
+        THError("Input shape and kernel shape wont match: (%d x %d vs %d x %d).",
+                kernel_h_, kernel_w, kernel_h_, kernel_w_);
     if (channels != channels_kernel)
-        THError("Input shape and kernel channels wont match: (%d vs %d).", 
-        channels, channels_kernel);
+        THError("Input shape and kernel channels wont match: (%d vs %d).",
+                channels, channels_kernel);
 
     const int height_out = (height + 2 * pad_h - (dilation_h * (kernel_h - 1) + 1)) / stride_h + 1;
     const int width_out = (width + 2 * pad_w - (dilation_w * (kernel_w - 1) + 1)) / stride_w + 1;
 
     if (THCudaTensor_nDimension(state, ones) != 2 ||
-        THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out)
+            THCudaTensor_size(state, ones, 0) * THCudaTensor_size(state, ones, 1) < height_out * width_out)
     {
         // Resize plane and fill with ones...
         THCudaTensor_resize2d(state, ones, height_out, width_out);
@@ -241,7 +241,7 @@ void modulated_deform_conv_cuda_backward(THCudaTensor *input, THCudaTensor *weig
 }
 
 void deform_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox,
-                                       THCudaTensor * trans, 
+                                       THCudaTensor * trans,
                                        THCudaTensor * out, THCudaTensor * top_count,
                                        const int no_trans,
                                        const float spatial_scale,
@@ -263,7 +263,7 @@ void deform_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox
 
     const int num_bbox = THCudaTensor_size(state, bbox, 0);
     if (num_bbox != THCudaTensor_size(state, out, 0))
-        THError("Output shape and bbox number wont match: (%d vs %d).", 
+        THError("Output shape and bbox number wont match: (%d vs %d).",
                 THCudaTensor_size(state, out, 0), num_bbox);
 
     DeformablePSROIPoolForward(THCState_getCurrentStream(state),
@@ -273,15 +273,15 @@ void deform_psroi_pooling_cuda_forward(THCudaTensor * input, THCudaTensor * bbox
                                THCudaTensor_data(state, out),
                                THCudaTensor_data(state, top_count),
                                batch, channels, height, width,
-                               num_bbox, 
-                               channels_trans, 
-                               no_trans, 
+                               num_bbox,
+                               channels_trans,
+                               no_trans,
                                spatial_scale,
-                               output_dim, 
-                               group_size, 
-                               pooled_size, 
+                               output_dim,
+                               group_size,
+                               pooled_size,
                                part_size,
-                               sample_per_part, 
+                               sample_per_part,
                                trans_std);
 }
 
@@ -301,7 +301,7 @@ void deform_psroi_pooling_cuda_backward(THCudaTensor * out_grad,
     THArgCheck(THCudaTensor_isContiguous(state, out_grad), 0, "out_grad tensor has to be contiguous");
     THArgCheck(THCudaTensor_isContiguous(state, input), 1, "input tensor has to be contiguous");
     THCAssertSameGPU(THCudaTensor_checkGPU(state, 7, input, bbox, trans, out_grad, top_count,
-                    input_grad, trans_grad));
+                                           input_grad, trans_grad));
 
     const int batch = THCudaTensor_size(state, input, 0);
     const int channels = THCudaTensor_size(state, input, 1);
@@ -311,7 +311,7 @@ void deform_psroi_pooling_cuda_backward(THCudaTensor * out_grad,
 
     const int num_bbox = THCudaTensor_size(state, bbox, 0);
     if (num_bbox != THCudaTensor_size(state, out_grad, 0))
-        THError("Output shape and bbox number wont match: (%d vs %d).", 
+        THError("Output shape and bbox number wont match: (%d vs %d).",
                 THCudaTensor_size(state, out_grad, 0), num_bbox);
 
     DeformablePSROIPoolBackwardAcc(THCState_getCurrentStream(state),
@@ -323,13 +323,13 @@ void deform_psroi_pooling_cuda_backward(THCudaTensor * out_grad,
                                    THCudaTensor_data(state, input_grad),
                                    THCudaTensor_data(state, trans_grad),
                                    batch, channels, height, width, num_bbox,
-                                   channels_trans, 
-                                   no_trans, 
-                                   spatial_scale, 
+                                   channels_trans,
+                                   no_trans,
+                                   spatial_scale,
                                    output_dim,
-                                   group_size, 
-                                   pooled_size, 
+                                   group_size,
+                                   pooled_size,
                                    part_size,
-                                   sample_per_part, 
+                                   sample_per_part,
                                    trans_std);
 }
